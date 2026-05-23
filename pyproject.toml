@@ -1,0 +1,28 @@
+[project]
+name = "talentscout"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "faiss-cpu>=1.13.2",
+    "fastapi>=0.136.1",
+    "instructor>=1.15.1",
+    "langchain>=1.3.0",
+    "langchain-community>=0.4.1",
+    "langchain-core>=1.4.0",
+    "langchain-groq>=1.1.2",
+    "langgraph>=1.2.0",
+    "loguru>=0.7.3",
+    "matplotlib>=3.10.9",
+    "pdfminer-six>=20260107",
+    "pydantic>=2.13.4",
+    "pymongo>=4.17.0",
+    "pymupdf>=1.27.2.3",
+    "python-multipart>=0.0.29",
+    "rapidfuzz>=3.14.5",
+    "reportlab>=4.5.1",
+    "sentence-transformers>=5.5.0",
+    "uvicorn>=0.47.0",
+]
