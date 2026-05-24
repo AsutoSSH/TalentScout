@@ -247,13 +247,18 @@ async def submit_answer(
         state
     )
 
+    latest_question_doc = (
+        state["question_history"][-1]
+    )
+
     return {
 
         "evaluation":
             latest_evaluation,
-
         "next_question":
-            state["last_question"]
+            state["last_question"],
+        "question_doc":
+            latest_question_doc
     }
 
 

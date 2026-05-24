@@ -1,67 +1,38 @@
-from fastapi import (
-    APIRouter,
-    UploadFile,
-    File,
-    HTTPException,
-    Depends,
-    Form
-)
-
-from pathlib import Path
-
-import shutil
-from uuid import uuid4
-import os
-
-
-from pydantic import BaseModel, model_validator
 import json
-from typing import List, Optional, Literal
+import os
+import shutil
+from pathlib import Path
+from typing import List, Optional
+from uuid import uuid4
 
-from backend.core.orchestration import (
-    initialize_interview_session
-)
+from fastapi import APIRouter, Depends, File, HTTPException, Form, UploadFile
+from pydantic import BaseModel, model_validator
 
-from backend.utils.mongodb_helpers import(
-    load_session
-)
+from backend.core.orchestration import initialize_interview_session
+from backend.utils.mongodb_helpers import load_session
 
-router = APIRouter(
-    prefix="/session",
-    tags=["Session"]
-)
-
+router = APIRouter(prefix="/session", tags=["Session"])
 UPLOAD_DIR = "uploaded_resumes"
-
-os.makedirs(
-    UPLOAD_DIR,
-    exist_ok=True
-)
-
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ==================================================
-# Pydantic Schemas
+# Pydantic Schemas & Helpers
 # ==================================================
 
 class CreateSessionPayload(BaseModel):
-    session_id: str | None = None
+    session_id: Optional[str] = None
     rag_mode: str
 
-    # Optional but highly recommended helper to parse JSON if sent as a single string
     @model_validator(mode='before')
     @classmethod
     def validate_to_json(cls, value):
-        if isinstance(value, str):
-            return json.loads(value)
-        return value
+        return json.loads(value) if isinstance(value, str) else value
 
 def get_session_payload(
-    session_id: str | None = Form(None),
+    session_id: Optional[str] = Form(None),
     rag_mode: str = Form(...)
 ) -> CreateSessionPayload:
-    """Extracts individual form fields and maps them into your Pydantic model."""
     return CreateSessionPayload(session_id=session_id, rag_mode=rag_mode)
-
 
 class SessionCreateResponse(BaseModel):
     session_id: str
@@ -79,157 +50,48 @@ class SessionSummaryResponse(BaseModel):
     rag_mode: str
     phase: str
 
-
 class DeleteSessionResponse(BaseModel):
     deleted: bool
 
-
 # =========================================================
-# Create Session
+# Endpoints
 # =========================================================
 
 @router.post("/create", response_model=SessionCreateResponse)
-
 async def create_session(
-
     payload: CreateSessionPayload = Depends(get_session_payload),
     resume: UploadFile = File(...),
 ):
     session_id = payload.session_id or str(uuid4())
-
-    file_ext = Path(
-        resume.filename
-    ).suffix
-
-    filename = (
-        f"{str(uuid4())}{file_ext}"
-    )
-
-    save_path = os.path.join(
-        UPLOAD_DIR,
-        filename
-    )
+    file_ext = Path(resume.filename).suffix
+    save_path = os.path.join(UPLOAD_DIR, f"{str(uuid4())}{file_ext}")
 
     with open(save_path, "wb") as buffer:
+        shutil.copyfileobj(resume.file, buffer)
 
-        shutil.copyfileobj(
-            resume.file,
-            buffer
-        )
-
-    session_id, state = (
-
-        await initialize_interview_session(
-            pdf_path=save_path,
-            session_id=session_id
-        )
-    )
-
+    session_id, state = await initialize_interview_session(pdf_path=save_path, session_id=session_id)
     state["rag_mode"] = payload.rag_mode
 
     return SessionCreateResponse(
-
         session_id=session_id,
-
-        skills=state.get(
-            "extracted_skills",
-            []
-        ),
-
-        domains=state.get(
-            "extracted_domains",
-            []
-        ),
-
+        skills=state.get("extracted_skills", []),
+        domains=state.get("extracted_domains", []),
         rag_mode=payload.rag_mode
     )
 
-
-# =========================================================
-# Get Session
-# =========================================================
-
-@router.get("/{session_id}")
-
-async def get_session(
-    session_id: str
-):
-
-    state = load_session(
-        session_id
-    )
-
+@router.get("/{session_id}", response_model=SessionSummaryResponse)
+async def get_session(session_id: str):
+    state = load_session(session_id)
     if state is None:
-
-        raise HTTPException(
-
-            status_code=404,
-
-            detail="Session not found"
-        )
+        raise HTTPException(status_code=404, detail="Session not found")
 
     return SessionSummaryResponse(
-
         session_id=session_id,
-
-        role=state.get(
-            "job_role"
-        ),
-
-        current_topic_index=state.get(
-            "current_topic_index",
-            0
-        ),
-
-        current_subtopic_index=state.get(
-            "current_subtopic_index",
-            0
-        ),
-
-        total_questions=len(
-            state.get(
-                "question_history",
-                []
-            )
-        ),
-
-        completed_questions=len(
-            state.get(
-                "evaluations",
-                []
-            )
-        ),
-
-        rag_mode=state.get(
-            "rag_mode",
-            "normal"
-        ),
-
-        phase=state.get(
-            "phase",
-            "unknown"
-        )
+        role=state.get("job_role"),
+        current_topic_index=state.get("current_topic_index", 0),
+        current_subtopic_index=state.get("current_subtopic_index", 0),
+        total_questions=len(state.get("question_history", [])),
+        completed_questions=len(state.get("evaluations", [])),
+        rag_mode=state.get("rag_mode", "normal"),
+        phase=state.get("phase", "unknown")
     )
-
-# =========================================================
-# Delete Session
-# =========================================================
-
-# @router.delete(
-
-#     "/{session_id}",
-
-#     response_model=DeleteSessionResponse
-# )
-
-# async def delete_session_endpoint(
-#     session_id: str
-# ):
-
-#     success = delete_session(
-#         session_id
-#     )
-
-#     return DeleteSessionResponse(
-#         deleted=success
-#     )

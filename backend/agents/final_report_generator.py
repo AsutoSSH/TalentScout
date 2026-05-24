@@ -13,52 +13,8 @@ from reportlab.platypus import (
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
-
-from reportlab.platypus.flowables import Preformatted
-from reportlab.platypus import Image
-
-# import matplotlib.pyplot as plt
-
-
-# def create_score_chart(scores):
-#     plt.figure(figsize=(6, 3))
-#     plt.plot(
-#         range(1, len(scores)+1),
-#         scores,
-#         marker="o"
-#     )
-#     plt.xlabel("Question Number")
-#     plt.ylabel("Score")
-#     plt.title("Score Progression")
-#     chart_path = "score_progression.png"
-#     plt.tight_layout()
-#     plt.savefig(chart_path)
-#     plt.close()
-#     return chart_path
-
-
-# def create_topic_chart(topic_scores):
-
-#     topics = list(topic_scores.keys())
-#     averages = [
-#         sum(v)/len(v)
-#         for v in topic_scores.values()
-#     ]
-#     plt.figure(figsize=(7, 4))
-
-#     plt.bar(
-#         topics,
-#         averages
-#     )
-#     plt.xticks(rotation=20)
-#     plt.ylabel("Average Score")
-#     plt.title("Topic-wise Performance")
-#     chart_path = "topic_scores.png"
-#     plt.tight_layout()
-#     plt.savefig(chart_path)
-#     plt.close()
-#     return chart_path
-
+from io import BytesIO
+from typing import Union, BinaryIO
 
 # =========================================================
 # Generate Interview Report PDF
@@ -66,11 +22,14 @@ from reportlab.platypus import Image
 
 def generate_interview_report(
     interview_state: dict,
-    output_path: str = "interview_report.pdf"
+    output_target: Union[str, BinaryIO, None] = None
 ):
+    
+    if output_target is None:
+        output_target = BytesIO()
 
     doc = SimpleDocTemplate(
-        output_path,
+        output_target,
         pagesize=letter
     )
 
@@ -446,8 +405,12 @@ def generate_interview_report(
 
     doc.build(elements)
 
-    return output_path
+    if isinstance(output_target, BytesIO):
+        output_target.seek(0)
+        
+        return output_target
 
+    return output_target
 
 
 if __name__ == "__main__":

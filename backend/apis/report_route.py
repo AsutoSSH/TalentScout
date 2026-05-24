@@ -4,7 +4,7 @@ from fastapi import (
 )
 
 from fastapi.responses import (
-    FileResponse
+    StreamingResponse
 )
 
 from pydantic import BaseModel
@@ -146,24 +146,13 @@ async def download_report(
             detail="Session not found"
         )
 
-    output_path = (
-        f"{session_id}_report.pdf"
-    )
+    pdf_buffer = await asyncio.to_thread(generate_interview_report,state)
 
-    pdf_path = await asyncio.to_thread(
-
-        generate_interview_report,
-
-        state,
-
-        output_path
-    )
-
-    return FileResponse(
-
-        pdf_path,
-
+    return StreamingResponse(
+        pdf_buffer,
         media_type="application/pdf",
-
-        filename="interview_report.pdf"
+        headers={
+            "Content-Disposition":
+            "attachment; filename=interview_report.pdf"
+        }
     )
