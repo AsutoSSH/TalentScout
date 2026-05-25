@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 BASE_URL = os.getenv("BASE_URL")
 API_PORT = os.getenv("PORT")
-API_BASE = f"http://{BASE_URL}:{API_PORT}"
+API_BASE = os.getenv("FRONTEND_API_BASE", f"http://{BASE_URL}:{API_PORT}")
 st.set_page_config(page_title="TalentScout Interview System", layout="wide")
 st.markdown("""
     <style>
