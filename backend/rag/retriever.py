@@ -4,9 +4,11 @@ import numpy as np
 import faiss
 from rapidfuzz import process, fuzz
 import random
-from sentence_transformers import (
-    SentenceTransformer
-)
+# from sentence_transformers import (
+#     SentenceTransformer
+# )
+from fastembed import TextEmbedding
+from collections import defaultdict
 
 from backend.rag.book_registry import (
     ROLE_BOOK_MAPPING
@@ -29,8 +31,11 @@ VECTOR_STORE_DIR = os.path.join(
 # Embedding Model
 # =========================================================
 
-embedding_model = SentenceTransformer(
-    "sentence-transformers/all-MiniLM-L6-v2"
+# embedding_model = SentenceTransformer(
+#     "sentence-transformers/all-MiniLM-L6-v2"
+# )
+embedding_model = TextEmbedding(
+    model_name="BAAI/bge-small-en-v1.5"
 )
 
 # =========================================================
@@ -124,14 +129,23 @@ def retrieve_relevant_chunks(
     # Embed query
     # ==========================================
 
-    query_embedding = embedding_model.encode(
+    # query_embedding = embedding_model.encode(
 
-        query,
+    #     query,
 
-        normalize_embeddings=True,
-        convert_to_numpy=True
+    #     normalize_embeddings=True,
+    #     convert_to_numpy=True
 
-    ).astype(np.float32).reshape(1, -1)
+    # ).astype(np.float32).reshape(1, -1)
+
+    query_embedding = np.array(
+
+        list(
+            embedding_model.embed([query])
+        ),
+        dtype=np.float32)
+
+    faiss.normalize_L2(query_embedding)
 
     all_candidates = []
 
@@ -139,7 +153,7 @@ def retrieve_relevant_chunks(
     for book in allowed_books:
         if book not in BOOK_INDICES: continue
         store = BOOK_INDICES[book]
-        distances, indices = store["index"].search(query_embedding, k)
+        distances, indices = store["index"].search(query_embedding, max(k * 3, 10))
 
         for score, idx in zip(distances[0], indices[0]):
             if idx == -1: continue
@@ -151,11 +165,40 @@ def retrieve_relevant_chunks(
             })
 
     # --- Sort and Filter ---
-    all_candidates.sort(key=lambda x: x["score"], reverse=True)
-    retrieved_chunks = all_candidates[:k]
-    print(f"Retrieved chunks: {retrieved_chunks}")
+    # 1. Group and sort books internally (Descending by score)
+    book_groups = defaultdict(list)
+    for c in all_candidates:
+        book_groups[c["source_book"]].append(c)
+
+    for book in book_groups:
+        book_groups[book].sort(key=lambda x: x["score"], reverse=True)
+
+    # 2. Round-robin retrieval
+    retrieved_chunks = []
+    book_counts = defaultdict(int)
+    max_per_book = int(k / len(allowed_books))
+
+    while len(retrieved_chunks) < k:
+        added = False
+        
+        for book in allowed_books:
+            # Stop early if we hit our global target 'k'
+            if len(retrieved_chunks) >= k:
+                break
+                
+            # Skip if book is empty or has reached its individual max cap
+            if not book_groups[book] or book_counts[book] >= max_per_book:
+                continue
+                
+            retrieved_chunks.append(book_groups[book].pop(0))
+            book_counts[book] += 1
+            added = True
+
+        if not added:  # Break out if no books have items left or all caps are hit
+            break
 
     use_rag = len(retrieved_chunks) > 0
+    print(f"Retrieved Chunks: {retrieved_chunks}")
     return {
         "use_rag": use_rag,
         "matched_role": matched_role,

@@ -5,13 +5,14 @@ import numpy as np
 
 import fitz
 
-from sentence_transformers import (
-    SentenceTransformer
-)
-
+# from sentence_transformers import (
+#     SentenceTransformer
+# )
+from fastembed import TextEmbedding
 from langchain_text_splitters import (
     RecursiveCharacterTextSplitter
 )
+from tqdm import tqdm
 
 # =========================================================
 # Paths
@@ -40,8 +41,12 @@ os.makedirs(
 # Embedding Model
 # =========================================================
 
-embedding_model = SentenceTransformer(
-    "sentence-transformers/all-MiniLM-L6-v2"
+# embedding_model = SentenceTransformer(
+#     "sentence-transformers/all-MiniLM-L6-v2"
+# )
+
+embedding_model = TextEmbedding(
+    model_name="BAAI/bge-small-en-v1.5"
 )
 
 # =========================================================
@@ -137,8 +142,19 @@ for book_name, data in book_data.items():
     print(f"\nBuilding index for {book_name}")
     chunks, metadata = data["chunks"], data["metadata"]
     
-    embeddings = np.array(embedding_model.encode(chunks, normalize_embeddings=True, show_progress_bar=True)).astype("float32")
-    
+    # embeddings = np.array(embedding_model.encode(chunks, normalize_embeddings=True, show_progress_bar=True)).astype("float32")
+
+    embeddings = np.array(
+        list(
+            tqdm(
+                embedding_model.embed(chunks, batch_size=64),
+                total=len(chunks),
+                desc="Embedding chunks"
+            )
+        ),
+        dtype=np.float32
+    )
+    faiss.normalize_L2(embeddings)
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
 
