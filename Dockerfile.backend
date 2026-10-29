@@ -40,7 +40,7 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 # =========================================================
 
-RUN uv sync --frozen
+RUN uv sync
 
 # =========================================================
 # Copy app
